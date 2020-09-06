@@ -7,14 +7,28 @@ from utils import (
     messages as _msg,
     restricted as _r,
     keyboard as _KB,
+    callback_stage as _stage,
 )
 from telegram.ext import ConversationHandler
 from telegram import ParseMode
 from utils.load import _lang, _text
 from drive.gdrive import GoogleDrive as _gd
-
-SET_FAV_MULTI, CHOOSE_MODE, GET_LINK, IS_COVER_QUICK, GET_DST = range(5)
-
+'''
+(
+    SET_FAV_MULTI,
+    CHOOSE_MODE,
+    GET_LINK,
+    IS_COVER_QUICK,
+    GET_DST,
+    COOK_ID,
+    REGEX_IN,
+    REGEX_GET_DST,
+    COOK_FAV_TO_SIZE,
+    COOK_FAV_PURGE,
+    COOK_ID_DEDU,
+    COOK_FAV_DEDU,
+) = range(12)
+'''
 pick_quick = []
 pick_fav = []
 unpick_fav = []
@@ -34,9 +48,42 @@ def _setting(update, context):
             _msg.set_multi_fav_guide(_lang), parse_mode=ParseMode.MARKDOWN_V2
         )
 
-        return SET_FAV_MULTI
+        return _stage.SET_FAV_MULTI
 
-    if "/setlist" == entry_cmd:
+    elif "purge" == entry_cmd[4:]:
+        fav_count = load.db_counters.find_one({"_id": "fav_count_list"})
+        if fav_count is not None and fav_count['fav_sum'] != 0:
+            fav_sum = fav_count['fav_sum']
+            query = { "fav_type": {"$regex": "^fav"} }
+            del_query = load.fav_col.delete_many(query)    
+            fav_sum -= int(del_query.deleted_count)
+            load.db_counters.update(
+                {"_id": "fav_count_list"},
+                {"fav_sum": fav_sum},
+                upsert=True,
+            )
+
+            update.effective_message.reply_text(
+                _text[_lang]["purge_fav"]
+            )
+
+            return ConversationHandler.END
+
+        else:
+            update.effective_message.reply_text(
+                _text[_lang]["show_fav_list_null"]
+            )
+
+            return ConversationHandler.END
+
+    elif "web" == entry_cmd[4:]:
+        update.effective_message.reply_text(
+            _text[_lang]["set_web_account"]
+        )
+
+        return _stage.SET_WEB
+
+    elif "/setlist" == entry_cmd:
         global showitem
         global showlist
         fav_count = load.db_counters.find_one({"_id": "fav_count_list"})
@@ -95,7 +142,7 @@ def _setting(update, context):
                             reply_markup=_KB.is_cover_keyboard(),
                         )
 
-                        return IS_COVER_QUICK
+                        return _stage.IS_COVER_QUICK
 
             elif "quick-" == each[:6]:
                 _func.delete_in_db_quick
@@ -199,7 +246,7 @@ def _multi_settings_recieved(update, context):
             _tmp_quick_counter += 1
             if _tmp_quick_counter == 1:
                 global pick_quick
-                pick_quick = _func.get_name_from_id(
+                pick_quick += _func.get_name_from_id(
                     update, each[6:], list_name=pick_quick
                 )
                 insert_fav_quick = _func.insert_to_db_quick(pick_quick, update)
@@ -210,7 +257,7 @@ def _multi_settings_recieved(update, context):
                         reply_markup=_KB.is_cover_keyboard(),
                     )
 
-                    return IS_COVER_QUICK
+                    return _stage.IS_COVER_QUICK
 
             elif _tmp_quick_counter < 1:
                 pass
@@ -234,7 +281,7 @@ def _multi_settings_recieved(update, context):
 
             if "+" == each[3]:
                 global pick_fav
-                pick_fav = _func.get_name_from_id(update, each[4:], list_name=pick_fav)
+                pick_fav += _func.get_name_from_id(update, each[4:], list_name=pick_fav)
                 for item in pick_fav:
                     item["fav_type"] = "fav"
                     try:
@@ -274,3 +321,17 @@ def _multi_settings_recieved(update, context):
                 update.effective_message.reply_text(_text[_lang]["get_multi_fav_error"])
 
             return ConversationHandler.END
+
+# ### set web acc/passwd
+def setWeb(update, context):
+    accpw_list = []
+    raw_accpw = update.effective_message.text
+    accpw_list = raw_accpw.split(",")
+    web_acc = accpw_list[0]
+    web_pw = accpw_list[1]
+    load.login_col.update_one({"_id": "login_info"},{"$set": {"username": web_acc,"password": web_pw,},},)
+    update.effective_message.reply_text(
+        _text[_lang]["set_web_success"]
+    )
+
+    return ConversationHandler.END

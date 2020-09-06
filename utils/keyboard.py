@@ -17,11 +17,39 @@ def start_keyboard():
 
     return InlineKeyboardMarkup(keyboard)
 
+def regex_in_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton(_langtext['quick_mode'], callback_data="quick"),
+            InlineKeyboardButton(_langtext['copy_mode'], callback_data="copy"),
+            InlineKeyboardButton(_langtext['size_mode'], callback_data="size"),
+        ],
+    ]
+
+    return InlineKeyboardMarkup(keyboard)
+
 def is_cover_keyboard():
     keyboard = [
         [
             InlineKeyboardButton(_langtext['is_cover'], callback_data="cover_quick"),
             InlineKeyboardButton(_langtext['not_cover'], callback_data="not_cover_quick"),
+        ],
+    ]
+
+    return InlineKeyboardMarkup(keyboard)
+
+def dedupe_mode_keyboard():
+    keyboard = [
+        [
+            InlineKeyboardButton("first", callback_data="first"),
+        ],
+        [
+            InlineKeyboardButton("newest", callback_data="newest"),
+            InlineKeyboardButton("oldest", callback_data="oldest"),
+        ],
+        [
+            InlineKeyboardButton("largest", callback_data="largest"),
+            InlineKeyboardButton("smallest", callback_data="smallest"),
         ],
     ]
 

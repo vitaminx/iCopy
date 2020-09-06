@@ -3,9 +3,12 @@
 
 from utils.load import _lang, _text
 from telegram.ext import ConversationHandler
-from utils import messages as _msg, restricted as _r, get_functions as _func, task_box as _box
-
-SET_FAV_MULTI, CHOOSE_MODE, GET_LINK, IS_COVER_QUICK, GET_DST = range(5)
+from utils import (
+    restricted as _r, 
+    get_functions as _func, 
+    task_box as _box, 
+    callback_stage as _stage,
+)
 
 @_r.restricted
 @_r.restricted_quick
@@ -22,7 +25,7 @@ def quick(update, context):
             + _text[_lang]["request_share_link"]
         )
 
-        return GET_LINK
+        return _stage.GET_LINK
 
     if update.callback_query.data == "quick":
         update.callback_query.edit_message_text(
@@ -33,4 +36,4 @@ def quick(update, context):
             + _text[_lang]["request_share_link"]
         )
 
-        return GET_LINK
+        return _stage.GET_LINK

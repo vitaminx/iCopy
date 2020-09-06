@@ -1,3 +1,6 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
 import logging, re, json, requests
 from utils import (
     load,
@@ -6,6 +9,8 @@ from utils import (
     get_set as _set,
     task_box as _box,
     task_payload as _payload,
+    callback_stage as _stage,
+    __version__,
 )
 from workflow import copy_workflow as _copy
 from utils.load import _lang, _text
@@ -21,24 +26,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SET_FAV_MULTI, CHOOSE_MODE, GET_LINK, IS_COVER_QUICK, GET_DST = range(5)
-
 regex1 = r"[-\w]{11,}"
 regex2 = r"[-\w]"
 judge_folder_len = [28, 33]
 pick_quick = []
 mode = ""
-
-
-@_r.restricted
-def cancel(update, context):
-    user = update.effective_user.first_name
-    logger.info("User %s canceled the conversation.", user)
-    update.effective_message.reply_text(
-        f"Bye! {update.effective_user.first_name} ," + _text[_lang]["cancel_msg"]
-    )
-    return ConversationHandler.END
-
+count = 0
 
 def cook_to_id(get_share_link):
     share_id_list = []
@@ -70,6 +63,29 @@ def get_name_from_id(update, taget_id, list_name):
     if len(taget_id) >= 11 and len(taget_id) < 28:
         cook_list.append(
             {"G_type": "G_drive", "G_id": taget_id, "G_name": load.all_drive[taget_id],}
+        )
+    elif len(taget_id) in judge_folder_len:
+        cook_list.append(
+            {
+                "G_type": "G_Folder",
+                "G_id": taget_id,
+                "G_name": _gd().file_get_name(file_id=taget_id),
+            }
+        )
+    else:
+        update.effective_message.reply_text(_msg.get_fav_len_invaild(_lang, taget_id))
+
+        return ConversationHandler.END
+
+    return cook_list
+
+def get_src_name_from_id(update, taget_id, list_name):
+    cook_list = []
+    cook_list = list(list_name)
+    if len(taget_id) >= 11 and len(taget_id) < 28:
+        target_info = _gd.drive_get(_gd(),drive_id=taget_id)
+        cook_list.append(
+            {"G_type": "G_drive", "G_id": taget_id, "G_name": target_info['name'],}
         )
     elif len(taget_id) in judge_folder_len:
         cook_list.append(
@@ -133,6 +149,7 @@ def delete_in_db(delete_request):
 
 def get_share_link(update, context):
     get_share_link = update.effective_message.text
+    tmp_src_name_list = ""
     tmp_task_list = []
     src_name_list = []
     src_id_list = cook_to_id(get_share_link)
@@ -150,7 +167,8 @@ def get_share_link(update, context):
             dst_name = doc["G_name"]
 
     for item in src_id_list:
-        src_name_list = get_name_from_id(update, item, list_name=src_name_list)
+        src_name_list += get_src_name_from_id(update, item, list_name=tmp_src_name_list)
+        tmp_src_name_list = ""
 
     for item in src_name_list:
         src_id = item["G_id"]
@@ -172,26 +190,48 @@ def get_share_link(update, context):
     _copy.current_dst_info = ""
     return ConversationHandler.END
 
-
-def _version(update, context):
-    update.message.reply_text(
-        "Welcome to use iCopy Telegram BOT\n\n"
-        f"Current Version : {load._version}\n\n"
-        f"Latest Version : {_get_ver()}"
-    )
-
-
-def _get_ver():
-    _url = "https://api.github.com/repos/fxxkrlab/iCopy/releases"
-    _r_ver = requests.get(_url).json()
-    _latest_ver = _r_ver[0]["tag_name"]
-    return _latest_ver
-
-
 def taskill(update, context):
-    ns.x = 1
+    entry_cmd = update.effective_message.text
+    if "/kill" == entry_cmd :
+        ns.x = 1
+    
+    elif context.args[0] == "task":
+        ns.x = 1
 
+    elif context.args[0] == "size":
+        ns.size = 1    
 
+    elif context.args[0] == "purge":
+        ns.purge = 1
+
+    elif context.arg[0] == "dedupe":
+        ns.dedupe = 1
+
+    else:
+        update.effective_message.reply_text(_text[_lang]["global_command_error"])
+
+def getIDbypath(dst_id, src_name):
+    global count
+    if count < 10:
+        try:
+            dst_endpoint_id = _gd.get_dst_endpoint_id(_gd(), dst_id, src_name)
+            if dst_endpoint_id:
+                dst_endpoint_link = r"https://drive.google.com/open?id={}".format(
+                    dst_endpoint_id['id']
+                )
+                dst_info = {"dst_endpoint_id":dst_endpoint_id['id'],"dst_endpoint_link":dst_endpoint_link,"linkstatus":True}
+                count = 0
+                return dst_info
+
+        except:
+            count += 1
+            return getIDbypath(dst_id, src_name)
+    
+    else:
+        dst_info = {"dst_endpoint_id":" ","dst_endpoint_link":" ","linkstatus":False}
+        count = 0
+        return dst_info
+        
 def check_restart(bot):
     check_restart = load.db_counters.find_one({"_id": "is_restart"})
     chat_id = check_restart["chat_id"]
@@ -201,6 +241,27 @@ def check_restart(bot):
         chat_id=chat_id, message_id=message_id, text=_text[_lang]["restart_success"]
     )
 
+def _version(update, context):
+    update.message.reply_text(
+        "Welcome to use iCopy Telegram BOT\n\n"
+        "Current Version : " + __version__.__version__ + "\n\n"
+        f"Latest Version : {_get_ver()}"
+    )
+
+def _get_ver():
+    _url = "https://api.github.com/repos/fxxkrlab/iCopy/releases"
+    _r_ver = requests.get(_url).json()
+    _latest_ver = _r_ver[0]["tag_name"]
+    return _latest_ver
+
+@_r.restricted
+def cancel(update, context):
+    user = update.effective_user.first_name
+    logger.info("User %s canceled the conversation.", user)
+    update.effective_message.reply_text(
+        f"Bye! {update.effective_user.first_name} ," + _text[_lang]["cancel_msg"]
+    )
+    return ConversationHandler.END
 
 def error(update, context):
     """Log Errors caused by Updates."""
